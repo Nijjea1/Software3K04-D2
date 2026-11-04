@@ -17,7 +17,9 @@ import copy
 from typing import Dict, Optional
 
 
+# One stocked medication. Holds its drawer, how many there are, and a revision counter.
 class _Item:
+    # Sets up one item record starting at revision zero.
     def __init__(self, item_id: str, drawer_id: str, quantity: int, max_capacity: int):
         self.item_id = item_id
         self.drawer_id = drawer_id
@@ -26,7 +28,9 @@ class _Item:
         self.revision = 0
 
 
+# Owns the stock numbers and the only safe way to change them.
 class InventoryStore:
+    # Loads the starting stock and prepares the list of transactions already applied.
     def __init__(self, items):
         self._items: Dict[str, _Item] = {}
         for item_id, drawer_id, qty, cap in items:
@@ -36,21 +40,26 @@ class InventoryStore:
 
     # ---------------- queries ----------------
 
+    # Says which drawer holds this medication.
     def drawer_of(self, item_id: str) -> Optional[str]:
         it = self._items.get(item_id)
         return it.drawer_id if it else None
 
+    # Says how many of this medication are confirmed to be in the cabinet.
     def quantity_of(self, item_id: str) -> Optional[int]:
         it = self._items.get(item_id)
         return it.quantity if it else None
 
+    # Returns the revision number, which goes up by one on every change.
     def revision_of(self, item_id: str) -> Optional[int]:
         it = self._items.get(item_id)
         return it.revision if it else None
 
+    # Says whether this cabinet stocks this medication at all.
     def knows(self, item_id: str) -> bool:
         return item_id in self._items
 
+    # Returns a copy of the whole stock list for display, never the live data.
     def snapshot(self):
         """Return a copy. Returning the live dict would leak the representation."""
         return {k: (v.drawer_id, v.quantity, v.revision)
@@ -58,11 +67,13 @@ class InventoryStore:
 
     # ---------------- commands ----------------
 
+    # Says whether there is enough stock to fill this request.
     def sufficient(self, item_id: str, qty: int) -> bool:
         """FR-DSP-02."""
         it = self._items.get(item_id)
         return it is not None and qty > 0 and it.quantity >= qty
 
+    # Takes stock out after a confirmed dispense. Doing it twice with the same id changes nothing.
     def apply_decrement(self, tx_id: str, item_id: str, qty: int) -> bool:
         """FR-INV-04, NFR-REL-02. Idempotent in the transaction id.
 
@@ -84,6 +95,7 @@ class InventoryStore:
         self._commit(item_id, staged, tx_id)
         return True
 
+    # Puts stock in on a restock, refusing a wrong drawer or anything over capacity.
     def apply_increment(self, tx_id: str, item_id: str, drawer_id: str, qty: int) -> bool:
         """FR-INV-02, FR-INV-03. Rejects a nonpositive quantity or a wrong drawer."""
         if tx_id in self._applied_tx:
@@ -101,6 +113,7 @@ class InventoryStore:
 
     # ---------------- private ----------------
 
+    # The single atomic step where the change actually lands.
     def _commit(self, item_id: str, staged: "_Item", tx_id: str) -> None:
         """The single atomic step. Either both lines run or neither does."""
         # The swap and the id both happen here, in one step. This is the atomic
@@ -109,6 +122,7 @@ class InventoryStore:
         self._applied_tx.add(tx_id)
         self._check_invariant()
 
+    # Proves no quantity went negative or above capacity. Raises if one did.
     def _check_invariant(self) -> None:
         for it in self._items.values():
             if it.quantity < 0 or it.quantity > it.max_capacity:

@@ -20,6 +20,7 @@ from enum import Enum
 from typing import Callable, Dict, Optional, Tuple
 
 
+# The four cabinet operating modes from Deliverable 1 Figure 8a.
 class Mode(Enum):
     STARTUP = "STARTUP"
     NORMAL = "NORMAL"
@@ -27,6 +28,7 @@ class Mode(Enum):
     FAULT = "FAULT"
 
 
+# The six things that can happen to the cabinet mode.
 class ModeEvent(Enum):
     STARTUP_OK = "startupComplete_ok"
     STARTUP_FAILED = "startupComplete_failed"
@@ -40,6 +42,7 @@ IGNORE = "IGNORE"
 ILLEGAL = "ILLEGAL"
 
 
+# Owns the cabinet mode and the table that says how it changes.
 class ModeManager:
     """Transition table realisation of Figure 8a."""
 
@@ -79,6 +82,7 @@ class ModeManager:
         },
     }
 
+    # Starts in STARTUP and remembers a callback so the App can log every change.
     def __init__(self, on_change: Optional[Callable[[Mode, Mode, str], None]] = None):
         self._mode = Mode.STARTUP
         self._on_change = on_change
@@ -87,17 +91,21 @@ class ModeManager:
 
     # ---------------- exported operations ----------------
 
+    # Returns the mode the cabinet is in right now.
     def mode(self) -> Mode:
         return self._mode
 
+    # Says whether dispensing is allowed, which is only in NORMAL.
     def dispensing_permitted(self) -> bool:
         """FR-MOD-02. True only in NORMAL."""
         return self._mode is Mode.NORMAL
 
+    # Says whether restocking is allowed, which is only in NORMAL.
     def replenishment_permitted(self) -> bool:
         """FR-MOD-02. True only in NORMAL."""
         return self._mode is Mode.NORMAL
 
+    # Takes one event, looks up the matching table cell, and does what the cell says.
     def handle(self, event: ModeEvent, guards_satisfied: bool = True,
                reason: str = "") -> Tuple[bool, str]:
         """Apply one event to the mode machine.
@@ -134,12 +142,14 @@ class ModeManager:
         self._check_invariant()
         return True, action
 
+    # Returns the fault that caused the most recent entry to FAULT, so it can be shown to staff.
     def triggering_fault(self):
         """FR-MOD-03. The fault that caused the most recent entry to FAULT."""
         return self._last_fault
 
     # ---------------- invariant ----------------
 
+    # Proves the mode is still one of the four defined values. Raises if it is not.
     def _check_invariant(self) -> None:
         if not isinstance(self._mode, Mode):
             raise AssertionError("INV-M1 violated: mode is not a Mode")

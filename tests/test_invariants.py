@@ -20,6 +20,7 @@ TOKENS = {"card-nurse": "u-nurse", "card-tech": "u-tech"}
 ROLES = {"u-nurse": Role.NURSE, "u-tech": Role.TECHNICIAN}
 
 
+# Builds a small two drawer cabinet for the invariant tests.
 def build():
     clock = SimulatedClock()
     lock = SimulatedLockDriver(DRAWERS)
@@ -32,8 +33,10 @@ def build():
     return app, clock, lock, drawers, removal
 
 
+# Proves the system wide and store invariants hold through real scenarios.
 class Invariants(unittest.TestCase):
 
+    # INV-G3. A second dispense cannot open a drawer while one is already open.
     def test_INV_G3_only_one_drawer_unlocked(self):
         app, clock, lock, drawers, removal = build()
         app.authenticate("card-nurse")
@@ -42,6 +45,7 @@ class Invariants(unittest.TestCase):
         unlocked = [d for d, _, state in app.drawer_report() if state == "UNLOCKED"]
         self.assertEqual(len(unlocked), 1)
 
+    # INV-G1. No drawer stays unlocked once the cabinet leaves NORMAL.
     def test_INV_G1_no_unlock_outside_normal(self):
         app, clock, lock, drawers, removal = build()
         app.authenticate("card-tech")
@@ -52,6 +56,7 @@ class Invariants(unittest.TestCase):
         self.assertIsNone(tx)
         self.assertIn("mode blocks", msg)
 
+    # INV-T2. An UNCERTAIN outcome leaves the stock count exactly where it was.
     def test_INV_T2_uncertain_never_decrements(self):
         app, clock, lock, drawers, removal = build()
         app.authenticate("card-nurse")
@@ -64,17 +69,20 @@ class Invariants(unittest.TestCase):
         after = app.inventory_snapshot()["MORPH-10MG"][1]
         self.assertEqual(before, after, "NFR-SAF-02: stock must not move")
 
+    # INV-I1. A restock that would go over capacity is refused.
     def test_INV_I1_quantity_never_exceeds_capacity(self):
         store = InventoryStore([("X", "D1", 5, 10)])
         self.assertFalse(store.apply_increment("t1", "X", "D1", 99))
         self.assertEqual(store.quantity_of("X"), 5)
 
+    # INV-I2. The same transaction id can only take stock out once.
     def test_INV_I2_decrement_is_idempotent(self):
         store = InventoryStore([("X", "D1", 5, 10)])
         self.assertTrue(store.apply_decrement("t1", "X", 2))
         self.assertFalse(store.apply_decrement("t1", "X", 2))
         self.assertEqual(store.quantity_of("X"), 3)
 
+    # INV-A2. The audit log refuses a record whose key looks like a credential.
     def test_INV_A2_credentials_are_never_logged(self):
         log = AuditLogStore(SimulatedClock(), "ADC-T")
         with self.assertRaises(AssertionError):
@@ -85,8 +93,10 @@ if __name__ == "__main__":
     unittest.main()
 
 
+# Proves the per drawer invariant and the one drawer at a time rule.
 class DrawerInvariant(unittest.TestCase):
 
+    # INV-D1. A drawer taken out of service always has a recorded reason.
     def test_INV_D1_inhibited_drawer_always_has_a_reason(self):
         from adc.behaviour.drawer_state import (DrawerEvent, DrawerServiceState,
                                                 DrawerStateTable)
@@ -95,6 +105,7 @@ class DrawerInvariant(unittest.TestCase):
         self.assertIs(t.state_of("D1"), DrawerServiceState.INHIBITED)
         self.assertEqual(t.inhibit_reason("D1"), "DRAWER_NOT_CLOSED")
 
+    # The second dispense is refused with drawer_already_open rather than opening a second drawer.
     def test_second_dispense_refused_while_a_drawer_is_open(self):
         app, clock, lock, drawers, removal = build()
         app.authenticate("card-nurse")

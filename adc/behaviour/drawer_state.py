@@ -19,11 +19,13 @@ IGNORE = "IGNORE"
 ILLEGAL = "ILLEGAL"
 
 
+# The two service states a single drawer can be in.
 class DrawerServiceState(Enum):
     IN_SERVICE = "IN_SERVICE"
     INHIBITED = "INHIBITED"
 
 
+# The four things that can happen to one drawer.
 class DrawerEvent(Enum):
     DRAWER_NOT_CLOSED = "drawerNotClosed"
     LOCK_MISMATCH = "lockMismatch"
@@ -31,6 +33,7 @@ class DrawerEvent(Enum):
     DISPENSE_REQUESTED = "dispenseRequested"
 
 
+# Tracks whether each drawer is in service, and why it was taken out of service.
 class DrawerStateTable:
     """One instance holds the state of every drawer."""
 
@@ -51,6 +54,7 @@ class DrawerStateTable:
         },
     }
 
+    # Puts every drawer in service with no inhibit reason recorded.
     def __init__(self, drawer_ids):
         self._state: Dict[str, DrawerServiceState] = {
             d: DrawerServiceState.IN_SERVICE for d in drawer_ids
@@ -58,16 +62,20 @@ class DrawerStateTable:
         self._reason: Dict[str, str] = {}
         self._check_invariant()
 
+    # Returns the service state of one drawer.
     def state_of(self, drawer_id: str) -> DrawerServiceState:
         return self._state[drawer_id]
 
+    # Says whether this drawer can be dispensed from, which a bad drawer blocks.
     def is_usable(self, drawer_id: str) -> bool:
         """FR-FLT-04. A dispense targeting an inhibited drawer is refused."""
         return self._state[drawer_id] is DrawerServiceState.IN_SERVICE
 
+    # Returns why this drawer was taken out of service, or None if it is fine.
     def inhibit_reason(self, drawer_id: str):
         return self._reason.get(drawer_id)
 
+    # Takes one event for one drawer and does what the table cell says.
     def handle(self, drawer_id: str, event: DrawerEvent,
                guards_satisfied: bool = True, reason: str = "") -> Tuple[bool, str]:
         # Look the answer up in the table instead of writing if-statements.
@@ -93,10 +101,12 @@ class DrawerStateTable:
         self._check_invariant()
         return True, action
 
+    # Lists every drawer currently out of service, which the App needs to keep them locked.
     def inhibited_drawers(self):
         return [d for d, s in self._state.items()
                 if s is DrawerServiceState.INHIBITED]
 
+    # Proves no drawer is out of service without a recorded reason. Raises if one is.
     def _check_invariant(self) -> None:
         for d, s in self._state.items():
             if s is DrawerServiceState.INHIBITED and d not in self._reason:

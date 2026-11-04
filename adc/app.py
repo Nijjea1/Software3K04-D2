@@ -34,7 +34,9 @@ from adc.hardware.lock_driver import LockDriver
 from adc.hardware.removal_sensor import RemovalSensor
 
 
+# The whole ADC software. Builds every module and runs the Deliverable 1 scenarios through them.
 class AdcApplication:
+    # Builds every module, locks all the drawers, and proves the invariants hold before anything runs.
     def __init__(self, cabinet_id, clock: Clock, lock: LockDriver,
                  drawers: DrawerSensor, reader: CredentialReader,
                  removal: RemovalSensor, drawer_ids, items, user_roles,
@@ -77,6 +79,7 @@ class AdcApplication:
 
     # ================= startup, FR-MOD-01, NFR-REL-04 =================
 
+    # Runs the power on self test and moves the cabinet into NORMAL, or into FAULT if it failed.
     def start_up(self, self_test_passes: bool = True) -> Mode:
         event = ModeEvent.STARTUP_OK if self_test_passes else ModeEvent.STARTUP_FAILED
         self._mode.handle(event, reason="startup self-test")
@@ -86,6 +89,7 @@ class AdcApplication:
 
     # ================= access control, FR-AUTH-* =================
 
+    # Logs a user in from a presented card and records the outcome either way.
     def authenticate(self, presented: str):
         result = self._sessions.authenticate(presented)
         if result is None:
@@ -98,6 +102,7 @@ class AdcApplication:
         self._check_invariants()
         return (user_id, role), "Session open for %s as %s" % (user_id, role.value)
 
+    # Logs the current user out and records it.
     def log_out(self) -> str:
         self._sessions.end_session()
         self._audit.append("session_end", "ok")
@@ -105,6 +110,7 @@ class AdcApplication:
 
     # ================= dispensing, FR-DSP-* =================
 
+    # Runs every check on a dispense request and shows the confirmation screen. Nothing unlocks here.
     def request_dispense(self, item_id: str, qty: int) -> Tuple[Optional[str], str]:
         """Validate a dispense request. Returns (tx_id or None, message).
 
@@ -122,6 +128,7 @@ class AdcApplication:
         drawer_id = self._inventory.drawer_of(item_id)
         tx = DispenseTransaction(tx_id, user_id, item_id, qty, drawer_id or "?")
 
+        # Shared denial path. Marks the transaction denied, records it, and tells the user why.
         def refuse(reason):
             tx.deny(reason)
             self._audit.append("dispense", "DENIED", user_id=user_id, tx_id=tx_id,
@@ -150,6 +157,7 @@ class AdcApplication:
         self._active_tx = tx
         return tx_id, self._ui.confirmation_screen(item_id, qty, drawer_id)
 
+    # The user confirmed, so unlock exactly one drawer and record it.
     def confirm_dispense(self) -> str:
         """FR-DSP-03. Unlocks exactly one drawer. INV-G3."""
         tx = self._active_tx
@@ -168,6 +176,7 @@ class AdcApplication:
         self._check_invariants()
         return "Drawer %s unlocked. Take the medication and close the drawer." % tx.drawer_id
 
+    # Reads the sensors, resolves the transaction through the function table, and moves stock only on row R3.
     def close_drawer_and_complete(self) -> str:
         """FR-DSP-04. Resolves the transaction through the function table."""
         tx = self._active_tx
@@ -214,6 +223,7 @@ class AdcApplication:
 
     # ================= replenishment, FR-INV-* =================
 
+    # Adds stock after the usual role and mode checks, and records the result.
     def replenish(self, item_id: str, drawer_id: str, qty: int) -> str:
         session = self._sessions.active_session()
         if session is None:
@@ -223,6 +233,7 @@ class AdcApplication:
         self._tx_counter += 1
         tx_id = "TX-%04d" % self._tx_counter
 
+        # Shared denial path for restocking. Records the refusal and tells the user why.
         def refuse(reason):
             self._audit.append("replenish", "DENIED", user_id=user_id, tx_id=tx_id,
                                detail={"item": item_id, "qty": qty, "reason": reason})
@@ -244,6 +255,7 @@ class AdcApplication:
 
     # ================= faults, FR-FLT-* =================
 
+    # The periodic health check. Looks for an open drawer, a jammed lock, and a silent link.
     def poll_hardware(self) -> str:
         """Periodic health check. FR-FLT-01, FR-FLT-02, FR-FLT-03."""
         notes = []
@@ -288,6 +300,7 @@ class AdcApplication:
         self._check_invariants()
         return "; ".join(notes) if notes else "All devices healthy."
 
+    # Handles a detected fault. Locks up first, then records it, alarms, and enters FAULT if it is critical.
     def _raise_fault(self, fault_type: str, drawer_id: str, critical: bool) -> None:
         self._audit.append("fault", fault_type,
                            detail={"drawer": drawer_id, "critical": critical})
@@ -303,6 +316,7 @@ class AdcApplication:
             self._open_drawer = None
             self._open_since_s = None
 
+    # A technician resets the cabinet, allowed only with the right role and a passing self test.
     def clear_fault(self, self_test_passes: bool = True) -> str:
         """FR-MOD-04. Needs an authorized role and a passing self test."""
         session = self._sessions.active_session()
@@ -323,6 +337,7 @@ class AdcApplication:
         self._check_invariants()
         return "Mode is now %s." % self._mode.mode().value
 
+    # Puts the cabinet into MAINTENANCE, which is refused while a drawer is still open.
     def enter_maintenance(self) -> str:
         session = self._sessions.active_session()
         if session is None:
@@ -337,6 +352,7 @@ class AdcApplication:
         self._check_invariants()
         return "Mode is now %s." % self._mode.mode().value
 
+    # Takes the cabinet back out of MAINTENANCE into NORMAL.
     def exit_maintenance(self) -> str:
         changed, note = self._mode.handle(ModeEvent.EXIT_MAINTENANCE)
         self._audit.append("mode", "normal" if changed else note)
@@ -345,6 +361,7 @@ class AdcApplication:
 
     # ================= external communication, FR-COM-* =================
 
+    # Gives an outbound message a unique id and puts it on the queue.
     # Outbound messages are queued, never sent directly. That is why the link
     # going down loses nothing: the queue just stops draining.
     def _emit(self, kind: str, payload) -> None:
@@ -352,6 +369,7 @@ class AdcApplication:
         msg_id = "MSG-%05d" % self._msg_counter
         self._queue.enqueue(msg_id, kind, payload)
 
+    # Handles a message coming in from Part B, rejecting anything malformed without changing anything.
     def monitor_response(self, wire: str) -> str:
         """Inbound from Part B. NFR-SEC-04 rejects anything malformed."""
         try:
@@ -367,6 +385,7 @@ class AdcApplication:
             return "Acknowledged %s." % msg["payload"].get("ack_id") if ok else "Unknown message id."
         return "Accepted %s." % msg["kind"]
 
+    # Shows what would be sent, oldest first, or says how many are stored while offline.
     def flush_queue(self):
         """FR-COM-04. Sends pending messages oldest first and shows the wire form."""
         if not self._link.is_usable() and self._link.state() is LinkState.OFFLINE:
@@ -377,6 +396,7 @@ class AdcApplication:
             sent.append("-> %s %s %s" % (msg_id, kind, "(awaiting ack)"))
         return sent or ["Queue empty."]
 
+    # Demo helper. Brings the link back and begins replaying the stored messages.
     def simulate_link_restored(self) -> str:
         self._link.note_response_received()
         self._audit.append("link", "resync")
@@ -385,39 +405,47 @@ class AdcApplication:
 
     # ================= status and audit =================
 
+    # Returns the one line status bar with the mode, the link and the stored message count.
     def banner(self) -> str:
         return self._ui.mode_banner(self._mode.mode().value,
                                     self._link.state().value,
                                     self._queue.pending_count())
 
+    # Returns a copy of the current stock for the status display.
     def inventory_snapshot(self):
         return self._inventory.snapshot()
 
+    # Returns each drawer with its service state and whether it is locked.
     def drawer_report(self):
         return [(d, self._drawer_state.state_of(d).value,
                  "locked" if self._lock.commanded_state_is_locked(d) else "UNLOCKED")
                 for d in self._drawer_ids]
 
+    # Returns the most recent audit records for review.
     def audit_tail(self, n: int = 100):
         """NFR-AUD-03. Any authenticated role may read the local record on this
         cabinet, per assumption A-15. Restricting reads by role is a Monitoring
         System concern, not a cabinet one."""
         return self._audit.last(n)
 
+    # Returns the messages still waiting for the Monitoring System.
     def pending_messages(self):
         return self._queue.describe_pending()
 
     # ================= invariants =================
 
+    # Called by the Mode Manager whenever the mode changes, so it gets logged and announced.
     def _on_mode_change(self, previous: Mode, new: Mode, reason: str) -> None:
         self._audit.append("mode_change", new.value,
                            detail={"from": previous.value, "to": new.value,
                                    "reason": reason})
         self._emit("MODE_CHANGE", {"from": previous.value, "to": new.value})
 
+    # Says whether this drawer is safe to relock, which means it is sensed closed.
     def _lock_is_secure(self, drawer_id: str) -> bool:
         return self._drawers.is_closed(drawer_id)
 
+    # Proves the three system wide safety rules still hold. Raises immediately if any is broken.
     # Called at the end of every public operation. If a change ever broke one
     # of these three rules, the demo would stop with a named violation rather
     # than carry on in a bad state.

@@ -15,6 +15,7 @@ Only this module changes.
 from typing import Optional
 
 
+# Owns every word the user reads. Screen wording and layout live here and nowhere else.
 class UiPresentation:
     # Text labels, not colours. A colour-blind user reads the same outcome,
     # which is NFR-USA-01.
@@ -39,6 +40,7 @@ class UiPresentation:
         "removal_unconfirmed": "Removal could not be confirmed. Pharmacy must reconcile this transaction.",
     }
 
+    # Builds the screen shown before any drawer unlocks, so the user checks before committing.
     def confirmation_screen(self, item_id: str, qty: int, drawer_id: str) -> str:
         """NFR-USA-04. Shown before any unlock is commanded."""
         return ("CONFIRM DISPENSE\n"
@@ -47,6 +49,7 @@ class UiPresentation:
                 "  drawer     : %s\n"
                 "  Confirm to unlock. Cancel to abort." % (item_id, qty, drawer_id))
 
+    # Builds the result message, with a text label and an actionable next step on a denial.
     def outcome(self, status: str, reason: Optional[str] = None) -> str:
         label = self._OUTCOME_LABEL.get(status, "[%s]" % status)
         if reason is None:
@@ -57,6 +60,7 @@ class UiPresentation:
         return "%s %s\n  reason    : %s\n  next step : %s" % (
             label, status.title(), reason.replace("_", " "), step)
 
+    # Builds the one line status bar showing the mode, the link, and any stored messages.
     def mode_banner(self, mode_name: str, link_name: str, pending: int) -> str:
         offline = "  OFFLINE, %d message(s) stored" % pending if link_name != "ONLINE" else ""
         return "MODE: %s   LINK: %s%s" % (mode_name, link_name, offline)

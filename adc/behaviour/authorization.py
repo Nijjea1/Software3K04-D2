@@ -13,6 +13,7 @@ from enum import Enum
 from typing import Dict, Set
 
 
+# The four kinds of staff who can use the cabinet.
 class Role(Enum):
     NURSE = "nurse"
     PHARMACIST = "pharmacist"
@@ -20,6 +21,7 @@ class Role(Enum):
     SAFETY_REVIEWER = "safety_reviewer"
 
 
+# The five protected actions a role might be allowed to perform.
 class Command(Enum):
     DISPENSE = "dispense"
     REPLENISH = "replenish"
@@ -28,6 +30,7 @@ class Command(Enum):
     REVIEW_AUDIT = "review_audit"
 
 
+# Owns the permission matrix. Decides who may do what and nothing else.
 class AuthorizationPolicy:
     """The matrix is private. Clients only ask the question."""
 
@@ -42,6 +45,7 @@ class AuthorizationPolicy:
         Role.SAFETY_REVIEWER: {Command.REVIEW_AUDIT},
     }
 
+    # Answers one question: may this role perform this command.
     def permits(self, role: Role, command: Command) -> bool:
         """Return True when role may perform command.
 

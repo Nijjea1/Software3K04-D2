@@ -13,9 +13,11 @@ import json
 from typing import Any, Dict
 
 
+# Owns the message format agreed with Part B. Nothing else knows what the wire looks like.
 class MessageCodec:
     PROTOCOL_VERSION = 1
 
+    # Turns a message into the text that goes out on the wire.
     def encode(self, msg_id: str, kind: str, payload: Dict[str, Any]) -> str:
         """Return the wire representation. JSON is an implementation choice."""
         # JSON and this field layout are the secret. Part B could switch to a
@@ -27,6 +29,7 @@ class MessageCodec:
             "payload": payload,
         }, sort_keys=True)
 
+    # Turns received text back into a message, refusing anything malformed or the wrong version.
     def decode(self, wire: str) -> Dict[str, Any]:
         """Return a validated inbound message.
 

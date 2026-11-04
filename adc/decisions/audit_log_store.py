@@ -20,7 +20,9 @@ from adc.hardware.clock import Clock
 _FORBIDDEN = ("token", "credential", "password", "secret")
 
 
+# Owns the audit trail. Records can be added and read, never changed or removed.
 class AuditLogStore:
+    # Starts an empty log numbered from one, tied to this cabinet.
     def __init__(self, clock: Clock, cabinet_id: str):
         self._clock = clock
         self._cabinet_id = cabinet_id
@@ -28,6 +30,7 @@ class AuditLogStore:
         self._next_seq = 1
         self._check_invariant()
 
+    # Adds one record and returns its number, refusing anything that looks like a credential.
     def append(self, event_type: str, outcome: str,
                user_id: Optional[str] = None, tx_id: Optional[str] = None,
                detail: Optional[Dict[str, Any]] = None) -> int:
@@ -62,13 +65,16 @@ class AuditLogStore:
         self._check_invariant()
         return record["seq"]
 
+    # Returns copies of the most recent records, oldest of them first.
     def last(self, n: int = 100):
         """NFR-AUD-03. Chronological order, newest last. Returns copies."""
         return [dict(r) for r in self._records[-n:]]
 
+    # Says how many records the log holds.
     def count(self) -> int:
         return len(self._records)
 
+    # Proves the record numbers still run one, two, three with no gaps. Raises if not.
     def _check_invariant(self) -> None:
         for i, r in enumerate(self._records):
             if r["seq"] != i + 1:

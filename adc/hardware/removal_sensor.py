@@ -14,7 +14,9 @@ confirmation is used instead. Only this module changes.
 from abc import ABC, abstractmethod
 
 
+# The removal interface. Anything that can confirm medication actually left the drawer fits here.
 class RemovalSensor(ABC):
+    # Says whether removal was positively confirmed for this drawer.
     @abstractmethod
     def removal_confirmed(self, drawer_id: str) -> bool:
         """Return True only when removal has been positively confirmed.
@@ -25,15 +27,20 @@ class RemovalSensor(ABC):
         """
 
 
+# The fake removal sensor. Stands in for a real sensor or a witnessed human confirmation.
 class SimulatedRemovalSensor(RemovalSensor):
+    # Starts with nothing confirmed for any drawer.
     def __init__(self):
         self._confirmed = {}
 
+    # Returns True only if removal was confirmed, and False if we simply do not know.
     # Default False. Not confirmed is the safe answer, and it is deliberately
     # not the same claim as confirmed-not-removed.
     def removal_confirmed(self, drawer_id: str) -> bool:
         return self._confirmed.get(drawer_id, False)
 
     # ---- simulation control, not part of the exported interface ----
+
+    # Demo helper. Records that removal was or was not confirmed for a drawer.
     def set_confirmed(self, drawer_id: str, value: bool) -> None:
         self._confirmed[drawer_id] = value

@@ -21,6 +21,7 @@ from enum import Enum
 from typing import Optional, Tuple
 
 
+# Every state one dispense can be in, from first requested to finally resolved.
 class TxStatus(Enum):
     REQUESTED = "REQUESTED"
     AUTHORIZED = "AUTHORIZED"
@@ -41,6 +42,7 @@ R5_NO_REMOVAL = "R5_removal_not_confirmed"
 R6_NEITHER = "R6_neither_confirmed"
 
 
+# The function table itself. Takes the four inputs and says which row R1 to R6 applies.
 def classify_completion(status: TxStatus, already_resolved: bool,
                         removal_confirmed: bool, closure_confirmed: bool) -> str:
     """Return the row identifier for this input combination.
@@ -65,9 +67,11 @@ def classify_completion(status: TxStatus, already_resolved: bool,
     return R6_NEITHER
 
 
+# One dispense from request to outcome. Knows the lifecycle but never touches stock.
 class DispenseTransaction:
     """One dispense. Created by the App for each request."""
 
+    # Creates the transaction, and denies it immediately if the quantity is not positive.
     def __init__(self, tx_id: str, user_id: str, item_id: str, qty: int,
                  drawer_id: str):
         if qty <= 0:
@@ -88,6 +92,7 @@ class DispenseTransaction:
 
     # ---------------- exported operations ----------------
 
+    # Refuses the transaction with a reason. No drawer is ever unlocked on this path.
     def deny(self, reason: str) -> None:
         """FR-DSP-04. No unlock is ever issued on this path, NFR-SAF-01."""
         self.status = TxStatus.DENIED
@@ -95,21 +100,25 @@ class DispenseTransaction:
         self._resolved = True
         self._check_invariant()
 
+    # Marks the request as having passed every check.
     def authorize(self) -> None:
         if self.status is TxStatus.REQUESTED:
             self.status = TxStatus.AUTHORIZED
         self._check_invariant()
 
+    # Records that the drawer was opened for this transaction.
     def mark_unlocked(self) -> None:
         if self.status is TxStatus.AUTHORIZED:
             self.status = TxStatus.UNLOCKED
         self._check_invariant()
 
+    # Records that the drawer was shut again, so the outcome can now be worked out.
     def mark_drawer_closed(self) -> None:
         if self.status is TxStatus.UNLOCKED:
             self.status = TxStatus.PENDING
         self._check_invariant()
 
+    # Works out the outcome using the function table and sets the final status.
     def apply_completion(self, removal_confirmed: bool,
                          closure_confirmed: bool) -> Tuple[str, Optional[str]]:
         """Resolve the transaction using the function table.
@@ -140,11 +149,13 @@ class DispenseTransaction:
         self._check_invariant()
         return row, self.denial_reason
 
+    # Says whether this transaction is finished and cannot change again.
     def is_resolved(self) -> bool:
         return self._resolved
 
     # ---------------- invariant ----------------
 
+    # Proves stock was never moved for anything but a COMPLETED transaction. Raises if it was.
     def _check_invariant(self) -> None:
         if self.status is not TxStatus.COMPLETED and self.decremented:
             raise AssertionError(

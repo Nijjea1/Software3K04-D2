@@ -14,7 +14,9 @@ from abc import ABC, abstractmethod
 from typing import Dict, Optional
 
 
+# The credential interface. Anything that can turn a card, PIN or fingerprint into a user id fits here.
 class CredentialReader(ABC):
+    # Takes what was presented at the reader and gives back who it belongs to, or None.
     @abstractmethod
     def read_user_id(self, presented: str) -> Optional[str]:
         """Return the user id for a presented credential, or None if it is not valid.
@@ -24,6 +26,7 @@ class CredentialReader(ABC):
         """
 
 
+# The fake reader. Holds a simple list of cards and who owns each one.
 class SimulatedCredentialReader(CredentialReader):
     """Simulated reader.
 
@@ -31,9 +34,11 @@ class SimulatedCredentialReader(CredentialReader):
     hash table or a biometric template store does not change the interface.
     """
 
+    # Stores the card to user lookup table for this cabinet.
     def __init__(self, token_to_user: Dict[str, str]):
         self._tokens = dict(token_to_user)
 
+    # Looks the card up and returns the user id, or None if the card is unknown.
     # Returns a user id, never the token. The token stops at this line, which
     # is why no audit record can contain one.
     def read_user_id(self, presented: str) -> Optional[str]:

@@ -54,6 +54,7 @@ Commands
 """
 
 
+# Builds one cabinet with the simulated hardware and the demo stock and staff.
 # All the wiring in one place. Swapping a Simulated class for a real driver is
 # a change to these five lines and nothing else.
 def build():
@@ -67,6 +68,7 @@ def build():
     return app, clock, lock, drawers, removal
 
 
+# Prints the status banner, every drawer, and the current stock.
 def show_status(app):
     print(app.banner())
     print("  drawers:")
@@ -77,6 +79,7 @@ def show_status(app):
         print("    %-12s drawer %-3s qty %-4d rev %d" % (item, drawer, qty, rev))
 
 
+# The command loop. Reads a word, calls one App method, prints what came back.
 # The loop below only parses words and calls App methods. No rule, threshold or
 # decision lives in this file, which is the point of keeping it thin.
 def main():
