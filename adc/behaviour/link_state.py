@@ -39,6 +39,8 @@ class LinkStateMachine:
 
     def note_response_received(self) -> Tuple[bool, str]:
         """A valid response arrived from the Monitoring System."""
+        # Coming back from OFFLINE goes to RESYNC, not straight to ONLINE. The
+        # stored messages have to be cleared out first.
         self._last_rx_s = self._clock.now_s()
         if self._state is LinkState.OFFLINE:
             self._state = LinkState.RESYNC
@@ -60,6 +62,9 @@ class LinkStateMachine:
         Effects: declares the link down after the configured number of missed
         heartbeat periods. Never changes the cabinet mode.
         """
+        # Only this method can declare the link down, and it never touches the
+        # cabinet mode. That separation is assumption A-05: losing the link is
+        # not a safety fault.
         silent_for = self._clock.now_s() - self._last_rx_s
         if self._timing.link_declared_down(silent_for) and self._state is not LinkState.OFFLINE:
             self._state = LinkState.OFFLINE

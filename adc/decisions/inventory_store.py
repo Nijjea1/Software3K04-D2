@@ -69,11 +69,15 @@ class InventoryStore:
         Returns True when the decrement was applied, False when it was a
         duplicate or the request was invalid. Never raises in normal use.
         """
+        # Replaying the same transaction id does nothing. This is what makes a
+        # retry after a lost acknowledgement safe.
         if tx_id in self._applied_tx:
             return False
         it = self._items.get(item_id)
         if it is None or qty <= 0 or it.quantity < qty:
             return False
+        # Build the new record beside the old one. If anything were wrong, the
+        # stored value is still the old one and nothing is half written.
         staged = copy.copy(it)
         staged.quantity = it.quantity - qty
         staged.revision = it.revision + 1
@@ -99,6 +103,8 @@ class InventoryStore:
 
     def _commit(self, item_id: str, staged: "_Item", tx_id: str) -> None:
         """The single atomic step. Either both lines run or neither does."""
+        # The swap and the id both happen here, in one step. This is the atomic
+        # commit for NFR-REL-01.
         self._items[item_id] = staged
         self._applied_tx.add(tx_id)
         self._check_invariant()

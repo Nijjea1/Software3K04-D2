@@ -54,6 +54,8 @@ Commands
 """
 
 
+# All the wiring in one place. Swapping a Simulated class for a real driver is
+# a change to these five lines and nothing else.
 def build():
     clock = SimulatedClock()
     lock = SimulatedLockDriver(DRAWERS)
@@ -75,6 +77,8 @@ def show_status(app):
         print("    %-12s drawer %-3s qty %-4d rev %d" % (item, drawer, qty, rev))
 
 
+# The loop below only parses words and calls App methods. No rule, threshold or
+# decision lives in this file, which is the point of keeping it thin.
 def main():
     app, clock, lock, drawers, removal = build()
     print("ADC Part A, Deliverable 2 demonstration")

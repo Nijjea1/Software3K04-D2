@@ -12,6 +12,8 @@ from adc.hardware.drawer_sensor import SimulatedDrawerSensor
 from adc.hardware.lock_driver import SimulatedLockDriver
 from adc.hardware.removal_sensor import SimulatedRemovalSensor
 
+# A smaller cabinet than the demo uses. The invariants do not depend on how
+# many drawers there are, so two is enough to break them.
 DRAWERS = ["D1", "D2"]
 ITEMS = [("MORPH-10MG", "D1", 12, 40), ("PARA-500MG", "D2", 30, 60)]
 TOKENS = {"card-nurse": "u-nurse", "card-tech": "u-tech"}
@@ -81,3 +83,23 @@ class Invariants(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DrawerInvariant(unittest.TestCase):
+
+    def test_INV_D1_inhibited_drawer_always_has_a_reason(self):
+        from adc.behaviour.drawer_state import (DrawerEvent, DrawerServiceState,
+                                                DrawerStateTable)
+        t = DrawerStateTable(["D1"])
+        t.handle("D1", DrawerEvent.DRAWER_NOT_CLOSED, reason="DRAWER_NOT_CLOSED")
+        self.assertIs(t.state_of("D1"), DrawerServiceState.INHIBITED)
+        self.assertEqual(t.inhibit_reason("D1"), "DRAWER_NOT_CLOSED")
+
+    def test_second_dispense_refused_while_a_drawer_is_open(self):
+        app, clock, lock, drawers, removal = build()
+        app.authenticate("card-nurse")
+        app.request_dispense("MORPH-10MG", 1)
+        app.confirm_dispense()
+        app.request_dispense("PARA-500MG", 1)
+        out = app.confirm_dispense()
+        self.assertIn("Another drawer is still open", out)

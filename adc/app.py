@@ -46,6 +46,9 @@ class AdcApplication:
         self._removal = removal
         self._drawer_ids = list(drawer_ids)
 
+        # Everything below this line is built here and nowhere else. This is the
+        # only file that holds more than one module reference, which is what
+        # keeps the USES relation a tree with no cycles.
         self._timing = timing or TimingPolicy()
         self._audit = AuditLogStore(clock, cabinet_id)
         self._inventory = InventoryStore(items)
@@ -66,6 +69,8 @@ class AdcApplication:
         self._active_tx: Optional[DispenseTransaction] = None
         self._mismatch_since_s = {}
 
+        # Start with everything locked, then prove the invariants hold. The
+        # constructor establishes them, as Week 7 slide 20 requires.
         for d in self._drawer_ids:
             self._lock.command_lock(d)
         self._check_invariants()
@@ -126,6 +131,8 @@ class AdcApplication:
             self._check_invariants()
             return None, self._ui.outcome("DENIED", reason)
 
+        # The checks run in a fixed order and the first failure wins. Nothing
+        # before this point has unlocked anything, so a denial costs nothing.
         if tx.status is TxStatus.DENIED:
             return refuse("invalid_quantity")
         if not self._authz.permits(role, Command.DISPENSE):
@@ -148,8 +155,10 @@ class AdcApplication:
         tx = self._active_tx
         if tx is None or tx.status is not TxStatus.AUTHORIZED:
             return self._ui.outcome("DENIED", "no_session")
+        # This guard is how INV-G3 is kept. One drawer open at a time, checked
+        # before the unlock rather than after.
         if self._open_drawer is not None:
-            return self._ui.outcome("DENIED", "drawer_inhibited")
+            return self._ui.outcome("DENIED", "drawer_already_open")
         self._lock.command_unlock(tx.drawer_id)
         self._open_drawer = tx.drawer_id
         self._open_since_s = self._clock.now_s()
@@ -172,6 +181,8 @@ class AdcApplication:
             self._open_since_s = None
             tx.mark_drawer_closed()
 
+        # The transaction decides the row, the App acts on it. Only row R3
+        # reaches apply_decrement, which is the whole of NFR-SAF-02.
         row, reason = tx.apply_completion(removal, closure)
         if row == R3_CONFIRMED:
             applied = self._inventory.apply_decrement(tx.tx_id, tx.item_id, tx.qty)
@@ -255,6 +266,8 @@ class AdcApplication:
             if not mismatched:
                 self._mismatch_since_s.pop(d, None)
                 continue
+            # Remember when the mismatch started so it can be timed. A brief
+            # disagreement while the bolt moves is normal and is tolerated.
             started = self._mismatch_since_s.setdefault(d, self._clock.now_s())
             held_for = self._clock.now_s() - started
             if not self._timing.lock_mismatch_expired(held_for):
@@ -280,6 +293,8 @@ class AdcApplication:
                            detail={"drawer": drawer_id, "critical": critical})
         self._emit("ALARM", {"type": fault_type, "drawer": drawer_id,
                              "critical": critical})
+        # Lock first, then change the mode. The safe physical state is reached
+        # before anything else happens, which is the fail-safe default.
         self._lock.command_lock(drawer_id)
         if critical:
             self._mode.handle(ModeEvent.CRITICAL_FAULT, reason=fault_type)
@@ -330,6 +345,8 @@ class AdcApplication:
 
     # ================= external communication, FR-COM-* =================
 
+    # Outbound messages are queued, never sent directly. That is why the link
+    # going down loses nothing: the queue just stops draining.
     def _emit(self, kind: str, payload) -> None:
         self._msg_counter += 1
         msg_id = "MSG-%05d" % self._msg_counter
@@ -382,9 +399,9 @@ class AdcApplication:
                 for d in self._drawer_ids]
 
     def audit_tail(self, n: int = 100):
-        session = self._sessions.active_session()
-        if session is not None and not self._authz.permits(session[1], Command.REVIEW_AUDIT):
-            pass  # any logged-in role may read on this cabinet, see A-15
+        """NFR-AUD-03. Any authenticated role may read the local record on this
+        cabinet, per assumption A-15. Restricting reads by role is a Monitoring
+        System concern, not a cabinet one."""
         return self._audit.last(n)
 
     def pending_messages(self):
@@ -401,6 +418,9 @@ class AdcApplication:
     def _lock_is_secure(self, drawer_id: str) -> bool:
         return self._drawers.is_closed(drawer_id)
 
+    # Called at the end of every public operation. If a change ever broke one
+    # of these three rules, the demo would stop with a named violation rather
+    # than carry on in a bad state.
     def _check_invariants(self) -> None:
         unlocked = [d for d in self._drawer_ids
                     if not self._lock.commanded_state_is_locked(d)]

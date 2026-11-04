@@ -46,6 +46,8 @@ class SessionManager:
                      outcome, per FR-LOG-01.
         Exceptions : an inactive account always fails, per NFR-SEC-03.
         """
+        # The reader turns the card into a user id. This module never sees the
+        # token itself, which is what makes NFR-SEC-01 possible to enforce.
         user_id = self._reader.read_user_id(presented)
         if user_id is None or user_id in self._inactive:
             self._check_invariant()
@@ -54,6 +56,8 @@ class SessionManager:
         if role is None:
             self._check_invariant()
             return None
+        # Overwriting the single slot is how INV-S1 stays true. There is no
+        # list of sessions, so two cannot be active at once.
         self._session = _Session(user_id, role, self._clock.now_s())
         self._check_invariant()
         return user_id, role
@@ -66,6 +70,8 @@ class SessionManager:
         """
         if self._session is None:
             return None
+        # The timeout is checked when somebody asks, not by a timer thread.
+        # Lazy expiry keeps the module single-threaded and easy to test.
         idle = self._clock.now_s() - self._session.last_activity_s
         if self._timing.session_has_expired(idle):
             self._session = None

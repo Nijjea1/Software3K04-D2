@@ -13,6 +13,8 @@ from adc.behaviour.dispense_transaction import (
 )
 
 
+# A transaction driven to PENDING, which is the only state the completion
+# table treats as a real attempt. Rows R3 to R6 all start from here.
 def _pending_tx():
     tx = DispenseTransaction("TX-1", "u-nurse-01", "MORPH-10MG", 2, "D1")
     tx.authorize()
@@ -80,3 +82,21 @@ class CompletionTableRows(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ClosureFalseRows(unittest.TestCase):
+    """Rows R4 and R6 are reachable only when the drawer is still open.
+    The command loop always closes the drawer, so these are covered here."""
+
+    def test_R4_removal_confirmed_but_drawer_still_open(self):
+        tx = _pending_tx()
+        row, reason = tx.apply_completion(True, False)
+        self.assertEqual(row, R4_NO_CLOSURE)
+        self.assertIs(tx.status, TxStatus.UNCERTAIN)
+        self.assertFalse(tx.decremented)
+
+    def test_R6_neither_confirmed_leaves_stock_alone(self):
+        tx = _pending_tx()
+        row, _ = tx.apply_completion(False, False)
+        self.assertEqual(row, R6_NEITHER)
+        self.assertFalse(tx.decremented)

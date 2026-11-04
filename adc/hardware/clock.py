@@ -26,6 +26,8 @@ class SystemClock(Clock):
         return time.monotonic()
 
 
+# Both classes sit behind the same Clock interface, so nothing above can tell
+# which one it was given. That is the Week 6 slide 14 rule.
 class SimulatedClock(Clock):
     """Simulated implementation used for the demonstration and the tests.
 
@@ -39,6 +41,8 @@ class SimulatedClock(Clock):
     def now_s(self) -> float:
         return self._t
 
+    # Not part of the Clock interface. Only the demo and the tests call it, so
+    # no behaviour module can move time on purpose.
     def advance(self, seconds: float) -> None:
         if seconds < 0:
             raise ValueError("time cannot move backwards")

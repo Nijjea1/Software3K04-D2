@@ -28,6 +28,8 @@ class OutboundQueue:
 
     def enqueue(self, msg_id: str, kind: str, payload: Dict[str, Any]) -> int:
         """Record a message for delivery. FR-COM-02."""
+        # dict(payload) copies it. Keeping the caller's dict would let them
+        # change a message after it was queued.
         e = _Entry(msg_id, kind, dict(payload), self._next_seq)
         self._entries.append(e)
         self._next_seq += 1
@@ -47,6 +49,8 @@ class OutboundQueue:
 
     def acknowledge(self, msg_id: str) -> bool:
         """Mark delivered only on an acknowledgement matching the message id."""
+        # A message clears only on an acknowledgement carrying its own id, so a
+        # stray or repeated ack cannot drop the wrong one.
         for e in self._entries:
             if e.msg_id == msg_id and not e.acknowledged:
                 e.acknowledged = True

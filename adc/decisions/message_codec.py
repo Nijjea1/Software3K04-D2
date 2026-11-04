@@ -18,6 +18,8 @@ class MessageCodec:
 
     def encode(self, msg_id: str, kind: str, payload: Dict[str, Any]) -> str:
         """Return the wire representation. JSON is an implementation choice."""
+        # JSON and this field layout are the secret. Part B could switch to a
+        # binary format and only this file would change.
         return json.dumps({
             "v": self.PROTOCOL_VERSION,
             "id": msg_id,
@@ -37,6 +39,8 @@ class MessageCodec:
             raise ValueError("unparseable message") from exc
         if not isinstance(obj, dict):
             raise ValueError("message is not an object")
+        # Version first, then required fields. Every failure raises before any
+        # local state is touched, which is what NFR-SEC-04 asks for.
         if obj.get("v") != self.PROTOCOL_VERSION:
             raise ValueError("unsupported protocol version")
         for field in ("id", "kind"):

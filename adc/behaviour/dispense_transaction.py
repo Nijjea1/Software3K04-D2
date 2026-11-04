@@ -13,7 +13,9 @@ after it, which is the practice on Week 7 slide 41.
 State invariant:
     INV-T1  status COMPLETED implies removal and closure were both confirmed
     INV-T2  status other than COMPLETED implies inventory was not decremented
-    INV-T3  at most one drawer is unlocked by this module at any time
+
+Note: "at most one drawer is unlocked" is INV-G3 and is checked in the
+application module, which owns the lock driver.
 """
 from enum import Enum
 from typing import Optional, Tuple
@@ -46,10 +48,14 @@ def classify_completion(status: TxStatus, already_resolved: bool,
     The rows are disjoint and together cover every case, so the default arm
     in apply_completion is unreachable unless this table is wrong.
     """
+    # Order matters. Duplicate is checked first so a repeated close is a no-op
+    # rather than a second decrement, which is NFR-REL-02.
     if already_resolved:
         return R2_DUPLICATE
     if status is not TxStatus.PENDING and status is not TxStatus.UNLOCKED:
         return R1_WRONG_STATE
+    # The four rows below are the two booleans in all four combinations, so the
+    # table is complete by construction. Only R3 is a success.
     if removal_confirmed and closure_confirmed:
         return R3_CONFIRMED
     if removal_confirmed and not closure_confirmed:
@@ -111,6 +117,8 @@ class DispenseTransaction:
         Returns (row_id, reason). The caller decrements inventory only when
         row R3 is returned, which is what keeps NFR-SAF-02 true.
         """
+        # Decide first, then act. The decision is a pure function, so it can be
+        # unit tested on its own without building a transaction.
         row = classify_completion(self.status, self._resolved,
                                   removal_confirmed, closure_confirmed)
         if row == R1_WRONG_STATE:
@@ -120,6 +128,8 @@ class DispenseTransaction:
         elif row == R3_CONFIRMED:
             self.status = TxStatus.COMPLETED
             self._resolved = True
+        # Anything short of both confirmations is UNCERTAIN, never COMPLETED.
+        # UNCERTAIN means a human has to reconcile it. Nothing is decremented.
         elif row in (R4_NO_CLOSURE, R5_NO_REMOVAL, R6_NEITHER):
             self.status = TxStatus.UNCERTAIN
             self.denial_reason = "removal_unconfirmed"

@@ -53,6 +53,9 @@ class SimulatedLockDriver(LockDriver):
         self._actual: Dict[str, bool] = {d: True for d in drawer_ids}
         self._stuck: Dict[str, bool] = {d: False for d in drawer_ids}
 
+    # Two separate fields. _commanded is what the software asked for, _actual is
+    # what the lock really did. A healthy lock keeps them equal, and the gap
+    # between them is exactly the fault FR-FLT-02 looks for.
     def command_lock(self, drawer_id: str) -> None:
         self._commanded[drawer_id] = True
         if not self._stuck[drawer_id]:
@@ -77,6 +80,8 @@ class SimulatedLockDriver(LockDriver):
         the commanded state. The drawer reports not engaged while the software
         believes it commanded locked.
         """
+        # Both lines are needed. Setting _stuck alone would stop future moves
+        # but leave the two fields agreeing, so no mismatch would be detected.
         self._stuck[drawer_id] = True
         self._actual[drawer_id] = not self._commanded[drawer_id]
 

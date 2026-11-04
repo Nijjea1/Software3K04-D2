@@ -34,5 +34,7 @@ class SimulatedCredentialReader(CredentialReader):
     def __init__(self, token_to_user: Dict[str, str]):
         self._tokens = dict(token_to_user)
 
+    # Returns a user id, never the token. The token stops at this line, which
+    # is why no audit record can contain one.
     def read_user_id(self, presented: str) -> Optional[str]:
         return self._tokens.get(presented)

@@ -29,6 +29,8 @@ class SimulatedRemovalSensor(RemovalSensor):
     def __init__(self):
         self._confirmed = {}
 
+    # Default False. Not confirmed is the safe answer, and it is deliberately
+    # not the same claim as confirmed-not-removed.
     def removal_confirmed(self, drawer_id: str) -> bool:
         return self._confirmed.get(drawer_id, False)
 

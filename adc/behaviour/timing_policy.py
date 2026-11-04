@@ -16,6 +16,8 @@ the leak Week 7 slide 22 identifies.
 
 
 class TimingPolicy:
+    # Every number lives in this one constructor. If the lab hardware needs a
+    # different threshold, this is the only place that changes.
     def __init__(self,
                  session_idle_s: float = 120.0,
                  drawer_close_s: float = 10.0,
@@ -50,6 +52,8 @@ class TimingPolicy:
     def resync_start_overdue(self, since_restore_s: float) -> bool:
         return since_restore_s >= self._resync_start_s
 
+    # The one number that does leak out, and only because a caller has to know
+    # how often to run the tick. Everything else stays behind a question.
     def heartbeat_period_s(self) -> float:
         """Exported because the scheduler must know how often to tick."""
         return self._heartbeat_period_s

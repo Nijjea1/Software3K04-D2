@@ -27,6 +27,8 @@ class SimulatedDrawerSensor(DrawerSensor):
     def is_closed(self, drawer_id: str) -> bool:
         return self._closed[drawer_id]
 
+    # These two are how the demo opens and closes a drawer by hand. They are
+    # not on DrawerSensor, so the software above cannot fake a sensor reading.
     # ---- simulation control, not part of the exported interface ----
     def set_open(self, drawer_id: str) -> None:
         self._closed[drawer_id] = False

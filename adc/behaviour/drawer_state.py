@@ -6,7 +6,11 @@ Secret         : the inhibit and release rules for one drawer.
 Realises Figure 8c from Deliverable 1. Implements FR-FLT-04, NFR-SAF-03.
 
 State invariant:
-    INV-D1  a drawer in INHIBITED is always commanded locked
+    INV-D1  a drawer in INHIBITED always has a recorded inhibit reason
+
+Note: "an INHIBITED drawer is always commanded locked" is INV-G2 and is
+checked in the application module, because this module deliberately cannot
+see the lock driver.
 """
 from enum import Enum
 from typing import Dict, Tuple
@@ -30,6 +34,8 @@ class DrawerEvent(Enum):
 class DrawerStateTable:
     """One instance holds the state of every drawer."""
 
+    # 2 states x 4 events = 8 cells, and all 8 are filled in. A drawer only
+    # leaves INHIBITED on faultCleared, so a fault cannot clear itself.
     _T: Dict[DrawerServiceState, Dict[DrawerEvent, object]] = {
         DrawerServiceState.IN_SERVICE: {
             DrawerEvent.DRAWER_NOT_CLOSED: (DrawerServiceState.INHIBITED, "inhibit"),
@@ -64,6 +70,8 @@ class DrawerStateTable:
 
     def handle(self, drawer_id: str, event: DrawerEvent,
                guards_satisfied: bool = True, reason: str = "") -> Tuple[bool, str]:
+        # Look the answer up in the table instead of writing if-statements.
+        # The table is the design, this method just reads it.
         cell = self._T[self._state[drawer_id]][event]
         if cell is IGNORE:
             self._check_invariant()
@@ -74,6 +82,8 @@ class DrawerStateTable:
         if not guards_satisfied:
             self._check_invariant()
             return False, "guard_not_satisfied"
+        # A real transition. Record the reason on the way in and drop it on
+        # the way out, which is what keeps INV-D1 true.
         next_state, action = cell
         self._state[drawer_id] = next_state
         if next_state is DrawerServiceState.INHIBITED:
@@ -89,5 +99,6 @@ class DrawerStateTable:
 
     def _check_invariant(self) -> None:
         for d, s in self._state.items():
-            if s is DrawerServiceState.INHIBITED and d not in self._reason and self._reason:
-                pass  # reason is recorded on entry, see handle
+            if s is DrawerServiceState.INHIBITED and d not in self._reason:
+                raise AssertionError(
+                    "INV-D1 violated: drawer %s is INHIBITED with no reason" % d)

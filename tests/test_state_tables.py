@@ -11,6 +11,8 @@ from adc.behaviour.mode_manager import Mode, ModeEvent, ModeManager
 
 class TransitionTablesAreTotal(unittest.TestCase):
 
+    # This test reads the table itself rather than running the machine. It is
+    # the cheapest way to prove no cell was forgotten.
     def test_mode_table_has_every_state_event_cell(self):
         table = ModeManager._T
         self.assertEqual(set(table.keys()), set(Mode))

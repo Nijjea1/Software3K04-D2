@@ -31,6 +31,8 @@ class Command(Enum):
 class AuthorizationPolicy:
     """The matrix is private. Clients only ask the question."""
 
+    # The whole permission matrix from Deliverable 1 section 8.3, in one place.
+    # Adding a role is one new line here and no change anywhere else.
     _MATRIX: Dict[Role, Set[Command]] = {
         Role.NURSE: {Command.DISPENSE},
         Role.PHARMACIST: {Command.DISPENSE, Command.REPLENISH,
@@ -50,4 +52,6 @@ class AuthorizationPolicy:
         Exceptions  : an unknown role returns False rather than raising, so a
                       configuration error can never open a drawer.
         """
+        # .get with an empty-set default is the fail-safe part. An unknown role
+        # gets no permissions, so a bad configuration cannot open a drawer.
         return command in self._MATRIX.get(role, set())

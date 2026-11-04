@@ -38,6 +38,8 @@ class AuditLogStore:
                      NFR-SEC-01 violation is caught at the boundary rather
                      than silently written.
         """
+        # Screening happens here, at the boundary. A caller that tries to log a
+        # token gets an exception instead of a written record.
         detail = dict(detail or {})
         for key in detail:
             if any(f in key.lower() for f in _FORBIDDEN):
@@ -53,6 +55,8 @@ class AuditLogStore:
             "tx_id": tx_id,
             "detail": detail,
         }
+        # Append only. There is no update and no delete method, so a record
+        # cannot be changed after the fact. That is NFR-AUD-01.
         self._records.append(record)
         self._next_seq += 1
         self._check_invariant()
